@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Toca y Llama</title>
+<link rel="icon" type="image/png" href="favicon-32x32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FAFAF9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Toca y Llama">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --naranja: #E8804A;
+    --naranja-oscuro: #C9622F;
+    --texto: #1C1C1E;
+    --texto-suave: #8E8E93;
+    --fondo: #FAFAF9;
+    --tarjeta: #FFFFFF;
+    --borde: #ECECEC;
+    --exito: #2FA84F;
+    --error: #E0453B;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html{ height:100%; }
+  body{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--fondo);
+    color: var(--texto);
+    min-height:100%;
+  }
+
+  /* ---------- SPLASH ---------- */
+  #splash{
+    position:fixed; inset:0; background: var(--fondo);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; z-index:200;
+    animation: splashOut 0.5s ease forwards; animation-delay: 1s;
+  }
+  #splash img{
+    width:88px; height:88px; border-radius:22px;
+    box-shadow: 0 10px 30px rgba(232,128,74,0.25);
+    animation: entrada 0.6s cubic-bezier(.34,1.56,.64,1) both;
+  }
+  #splash .marca{ font-size:1.05rem; font-weight:600; opacity:0; animation: fadeUp 0.5s ease 0.2s forwards; }
+  @keyframes entrada{ from{opacity:0; transform:scale(0.7);} to{opacity:1; transform:scale(1);} }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  @keyframes splashOut{ to{ opacity:0; visibility:hidden; } }
+
+  /* ---------- CABECERA (fija arriba) ---------- */
+  .cabecera{
+    position:fixed; top:0; left:0; right:0; z-index:20;
+    padding: 16px 20px; padding-top: calc(16px + env(safe-area-inset-top));
+    display:flex; align-items:center; gap:10px;
+    border-bottom: 1px solid var(--borde);
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(10px);
+  }
+  .cabecera img{ width:28px; height:28px; border-radius:8px; }
+  .cabecera span{ font-weight:600; font-size:1rem; }
+  #btnInstalar{
+    display:none; margin-left:auto;
+    background: rgba(232,128,74,0.1); color:var(--naranja-oscuro);
+    border:none; border-radius:20px; padding:7px 14px;
+    font-size:0.78rem; font-weight:600; font-family:inherit; cursor:pointer;
+  }
+
+  /* ---------- CONTENIDO (con hueco para cabecera y barra) ---------- */
+  .contenido{
+    padding: calc(70px + env(safe-area-inset-top)) 20px calc(100px + env(safe-area-inset-bottom));
+    min-height:100vh;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .vista{ display:none; }
+  .vista.activa{ display:block; animation: fadeUp 0.3s ease both; }
+
+  /* ---------- TARJETAS / COMPONENTES ---------- */
+  .tarjeta{
+    background: var(--tarjeta);
+    border: 1px solid var(--borde);
+    border-radius: 18px;
+    padding: 22px;
+    margin-bottom: 16px;
+  }
+  .tarjeta h2{ font-size:1rem; font-weight:600; margin-bottom:6px; }
+  .tarjeta p.ayuda{ color: var(--texto-suave); font-size:0.87rem; line-height:1.5; margin-bottom:16px; }
+
+  .icono-circulo{
+    width:64px; height:64px; border-radius:50%;
+    background: rgba(232,128,74,0.1);
+    display:flex; align-items:center; justify-content:center;
+    margin: 4px auto 18px;
+  }
+  .icono-circulo svg{ width:28px; height:28px; }
+
+  h1.titulo-vista{ font-size:1.3rem; font-weight:700; text-align:center; margin-bottom:6px; }
+  p.subtitulo-vista{ text-align:center; color: var(--texto-suave); font-size:0.9rem; margin-bottom:24px; line-height:1.5; }
+
+  label{ display:block; font-size:0.82rem; color: var(--texto-suave); margin-bottom:6px; font-weight:500; }
+  input, textarea{
+    width:100%; background: var(--fondo);
+    border:1px solid var(--borde); color: var(--texto);
+    border-radius:12px; padding:13px 14px;
+    font-family:inherit; font-size:0.95rem;
+    margin-bottom:14px; outline:none;
+    transition: border-color 0.15s ease;
+  }
+  input:focus, textarea:focus{ border-color: var(--naranja); }
+  textarea{ resize:none; }
+
+  .btn{
+    width:100%; background: var(--naranja); color:#fff;
+    border:none; border-radius:14px; padding:14px;
+    font-weight:600; font-size:0.95rem; font-family:inherit;
+    cursor:pointer; transition: opacity 0.15s ease, transform 0.1s ease;
+  }
+  .btn:active{ transform: scale(0.98); }
+  .btn:disabled{ opacity:0.5; }
+  .btn-secundario{ background: var(--fondo); color: var(--texto); border:1px solid var(--borde); }
+
+  .tabs-auth{ display:flex; gap:6px; margin-bottom:18px; background: var(--fondo); padding:4px; border-radius:12px; }
+  .tab-auth{
+    flex:1; text-align:center; padding:9px; border-radius:9px;
+    font-size:0.85rem; font-weight:500; color: var(--texto-suave); cursor:pointer;
+  }
+  .tab-auth.activo{ background:#fff; color: var(--texto); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+  .mensaje{ font-size:0.85rem; margin-top:8px; line-height:1.4; }
+  .mensaje.error{ color: var(--error); }
+  .mensaje.ok{ color: var(--exito); }
+
+  .marco-item{ border:1px solid var(--borde); border-radius:14px; padding:16px; margin-bottom:12px; background: var(--fondo); }
+  .marco-item .cod{ color: var(--naranja-oscuro); font-weight:600; font-size:0.82rem; margin-bottom:12px; }
+  .marco-item .fila{ display:flex; gap:8px; align-items:flex-start; }
+  .marco-item input{ margin-bottom:0; flex:1; }
+  .marco-item .fila button{
+    background: var(--naranja); color:#fff; border:none; border-radius:10px;
+    padding:0 16px; font-weight:600; cursor:pointer; font-size:0.85rem; height:44px; flex-shrink:0;
+  }
+
+  .spinner{
+    width:26px; height:26px; margin:0 auto 18px;
+    border:3px solid rgba(232,128,74,0.2); border-top-color: var(--naranja);
+    border-radius:50%; animation: girar 0.7s linear infinite;
+  }
+  @keyframes girar{ to{ transform: rotate(360deg); } }
+
+  .btn-llamar-grande{
+    display:block; text-align:center; text-decoration:none;
+    background: var(--naranja); color:#fff; font-weight:600; font-size:1rem;
+    padding:16px; border-radius:16px; margin-top:6px;
+  }
+
+  .banner-instalar{
+    display:flex; align-items:center; gap:12px;
+    background: rgba(232,128,74,0.08); border:1px solid rgba(232,128,74,0.2);
+    border-radius:16px; padding:14px 16px; margin-bottom:16px;
+  }
+  .banner-instalar img{ width:40px; height:40px; border-radius:10px; flex-shrink:0; }
+  .banner-instalar div{ flex:1; }
+  .banner-instalar strong{ font-size:0.88rem; display:block; }
+  .banner-instalar p{ font-size:0.78rem; color: var(--texto-suave); margin-top:2px; }
+  .banner-instalar button{
+    background: var(--naranja); color:#fff; border:none; border-radius:20px;
+    padding:8px 14px; font-size:0.78rem; font-weight:600; font-family:inherit; cursor:pointer; flex-shrink:0;
+  }
+
+  /* ---------- BARRA INFERIOR (fija abajo) ---------- */
+  .barra-inferior{
+    position:fixed; bottom:0; left:0; right:0; z-index:20;
+    display:flex; border-top:1px solid var(--borde);
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(10px);
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  }
+  .barra-item{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:none; border:none; cursor:pointer; padding:6px 0;
+    color: var(--texto-suave); font-family:inherit;
+  }
+  .barra-item svg{ width:22px; height:22px; }
+  .barra-item span{ font-size:0.68rem; font-weight:500; }
+  .barra-item.activo{ color: var(--naranja); }
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <img src="logo-icono.png" alt="Toca y Llama">
+  <div class="marca">Toca y Llama</div>
+</div>
+
+<div class="cabecera">
+  <img src="logo-icono.png" alt="">
+  <span>Toca y Llama</span>
+  <button id="btnInstalar">📲 Instalar</button>
+</div>
+
+<div class="contenido">
+
+  <!-- ===== VISTA: LLAMAR ===== -->
+  <div class="vista" id="vistaLlamar">
+
+    <div id="llamarSinCodigo">
+      <div class="icono-circulo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#E8804A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </div>
+      <h1 class="titulo-vista">Listo para llamar</h1>
+      <p class="subtitulo-vista">Toca la foto de tu marco Toca y Llama para llamar automáticamente. Si algún día no se abre solo, escribe aquí el código:</p>
+      <div class="tarjeta">
+        <label for="codigoManual">Código del marco</label>
+        <input type="text" id="codigoManual" placeholder="Ej: TYL-0001">
+        <button class="btn" id="btnBuscarManual">Buscar y llamar</button>
+      </div>
+    </div>
+
+    <div id="llamarCargando" style="display:none; text-align:center; padding-top:40px;">
+      <div class="spinner"></div>
+      <h1 class="titulo-vista">Buscando el contacto…</h1>
+      <p class="subtitulo-vista">Un momento, por favor.</p>
+    </div>
+
+    <div id="llamarEncontrado" style="display:none; text-align:center; padding-top:20px;">
+      <div class="icono-circulo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#E8804A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </div>
+      <h1 class="titulo-vista">Llamando a <span id="nombrePersona" style="color:var(--naranja-oscuro);"></span></h1>
+      <p class="subtitulo-vista">Si no se abre solo, toca el botón.</p>
+      <a href="#" class="btn-llamar-grande" id="botonLlamar">📞 Llamar ahora</a>
+    </div>
+
+    <div id="llamarError" style="display:none; text-align:center; padding-top:20px;">
+      <div class="icono-circulo" style="background:rgba(224,69,59,0.1);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#E0453B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <h1 class="titulo-vista">No encontramos este marco</h1>
+      <p class="subtitulo-vista">Puede que el código no esté activado todavía. Contacta con Toca y Llama si crees que es un error.</p>
+    </div>
+  </div>
+
+  <!-- ===== VISTA: MI NÚMERO ===== -->
+  <div class="vista" id="vistaCuenta">
+    <div id="cuentaCargando" style="text-align:center; color:var(--texto-suave); padding:20px 0;">Cargando…</div>
+
+    <div id="cuentaAuth" style="display:none;">
+      <div class="icono-circulo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#E8804A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </div>
+      <h1 class="titulo-vista">Mi número</h1>
+      <p class="subtitulo-vista">Entra a tu cuenta y escribe el código de tu marco para poder cambiar a quién llama.</p>
+
+      <div class="banner-instalar" id="bannerInstalar" style="display:none;">
+        <img src="logo-icono.png" alt="">
+        <div>
+          <strong>Instala la app</strong>
+          <p>Accede más rápido desde tu pantalla de inicio</p>
+        </div>
+        <button id="btnInstalarBanner">Instalar</button>
+      </div>
+
+      <div class="tarjeta">
+        <div class="tabs-auth">
+          <div class="tab-auth activo" id="tabEntrar">Entrar</div>
+          <div class="tab-auth" id="tabRegistro">Crear cuenta</div>
+        </div>
+        <label for="email">Correo electrónico</label>
+        <input type="email" id="email" placeholder="tucorreo@ejemplo.com">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" placeholder="Mínimo 6 caracteres">
+        <button class="btn" id="btnAuth">Entrar</button>
+        <div class="mensaje" id="mensajeAuth"></div>
+      </div>
+    </div>
+
+    <div id="cuentaPanel" style="display:none;">
+      <div class="tarjeta">
+        <h2>Añadir un marco</h2>
+        <p class="ayuda">Escribe el código que venía con tu Toca y Llama para vincularlo a tu cuenta.</p>
+        <label for="codigoReclamar">Código del marco</label>
+        <input type="text" id="codigoReclamar" placeholder="Ej: TYL-0001">
+        <button class="btn" id="btnReclamar">Vincular marco</button>
+        <div class="mensaje" id="mensajeReclamar"></div>
+      </div>
+
+      <div class="tarjeta">
+        <h2>Mis marcos</h2>
+        <div id="listaMarcos"><p class="ayuda">Aún no tienes marcos vinculados.</p></div>
+      </div>
+
+      <button class="btn btn-secundario" id="btnSalir">Cerrar sesión</button>
+    </div>
+  </div>
+
+  <!-- ===== VISTA: RESEÑAS ===== -->
+  <div class="vista" id="vistaResenas">
+    <h1 class="titulo-vista">Deja tu reseña</h1>
+    <p class="subtitulo-vista">Cuéntanos tu experiencia, qué falla o qué te gustaría que hiciéramos distinto.</p>
+    <div class="tarjeta">
+      <label for="nombreResena">Tu nombre</label>
+      <input type="text" id="nombreResena" placeholder="Ej: Marta">
+      <label for="textoResena">Tu reseña</label>
+      <textarea id="textoResena" rows="4" placeholder="Escribe aquí tu opinión o sugerencia…"></textarea>
+      <button class="btn" id="enviarResena">Enviar reseña</button>
+      <div class="mensaje ok" id="graciasResena" style="display:none;">¡Gracias por tu reseña, <span id="nombreGracias"></span>! 🙏</div>
+      <div class="mensaje error" id="errorResena" style="display:none;"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="barra-inferior">
+  <button class="barra-item" id="navCuenta">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+    <span>Mi número</span>
+  </button>
+  <button class="barra-item" id="navLlamar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+    <span>Llamar</span>
+  </button>
+  <button class="barra-item" id="navResenas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+    <span>Reseñas</span>
+  </button>
+</div>
+
+<script>
+  // ---------- Config ----------
+  const SUPABASE_URL = "https://acatpkobvmomosmamqin.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjYXRwa29idm1vbW9zbWFtcWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTMxOTksImV4cCI6MjEwMDM4OTE5OX0.NfXVb6jsoPScxfwDM4Kh_x2rggyngvD1LJP8fnrFsmw";
+  const URL_RESENAS = "https://script.google.com/macros/s/AKfycbwz7e6ro4ygo9X_5gIYs97k280_pnhB3AR7x1UJLFNMEsBFWGpB6VYqfV6T7qxGDZnn/exec";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js'); }
+
+  // ---------- Instalar (Android/Chrome) ----------
+  let eventoInstalar = null;
+  const btnInstalar = document.getElementById('btnInstalar');
+  const bannerInstalar = document.getElementById('bannerInstalar');
+  const btnInstalarBanner = document.getElementById('btnInstalarBanner');
+
+  const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const yaInstalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+  function mostrarBotonesInstalar(){
+    if (yaInstalada) return;
+    btnInstalar.style.display = 'inline-block';
+    bannerInstalar.style.display = 'flex';
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    eventoInstalar = e;
+    mostrarBotonesInstalar();
+  });
+
+  async function dispararInstalar(){
+    if (esIOS){
+      alert('Para instalarla en iPhone: toca el botón Compartir (□↑) y luego "Añadir a pantalla de inicio".');
+      return;
+    }
+    if (!eventoInstalar) return;
+    eventoInstalar.prompt();
+    await eventoInstalar.userChoice;
+    eventoInstalar = null;
+    btnInstalar.style.display = 'none';
+    bannerInstalar.style.display = 'none';
+  }
+  btnInstalar.addEventListener('click', dispararInstalar);
+  btnInstalarBanner.addEventListener('click', dispararInstalar);
+  window.addEventListener('appinstalled', () => {
+    btnInstalar.style.display = 'none';
+    bannerInstalar.style.display = 'none';
+  });
+  if (esIOS && !yaInstalada) mostrarBotonesInstalar();
+
+  // ---------- Navegación por pestañas ----------
+  const vistas = { llamar: document.getElementById('vistaLlamar'), cuenta: document.getElementById('vistaCuenta'), resenas: document.getElementById('vistaResenas') };
+  const navs = { llamar: document.getElementById('navLlamar'), cuenta: document.getElementById('navCuenta'), resenas: document.getElementById('navResenas') };
+
+  function irA(nombre){
+    Object.keys(vistas).forEach(k => {
+      vistas[k].classList.toggle('activa', k === nombre);
+      navs[k].classList.toggle('activo', k === nombre);
+    });
+  }
+  navs.llamar.addEventListener('click', () => irA('llamar'));
+  navs.cuenta.addEventListener('click', () => irA('cuenta'));
+  navs.resenas.addEventListener('click', () => irA('resenas'));
+
+  // ---------- LLAMAR ----------
+  const elSinCodigo = document.getElementById('llamarSinCodigo');
+  const elCargando = document.getElementById('llamarCargando');
+  const elEncontrado = document.getElementById('llamarEncontrado');
+  const elError = document.getElementById('llamarError');
+
+  async function buscarYMostrar(codigo){
+    elSinCodigo.style.display = 'none';
+    elEncontrado.style.display = 'none';
+    elError.style.display = 'none';
+    elCargando.style.display = 'block';
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/marcos?codigo=eq.${encodeURIComponent(codigo)}&select=*`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      const datos = await resp.json();
+      const marco = datos[0];
+      elCargando.style.display = 'none';
+      if (!marco || !marco.numero_llamada){ elError.style.display = 'block'; return; }
+      document.getElementById('nombrePersona').textContent = marco.nombre_persona || '';
+      const enlace = `tel:${marco.numero_llamada}`;
+      document.getElementById('botonLlamar').href = enlace;
+      elEncontrado.style.display = 'block';
+      setTimeout(() => { window.location.href = enlace; }, 300);
+    } catch(err){
+      console.error(err);
+      elCargando.style.display = 'none';
+      elError.style.display = 'block';
+    }
+  }
+
+  document.getElementById('btnBuscarManual').addEventListener('click', () => {
+    const codigo = document.getElementById('codigoManual').value.trim();
+    if (codigo) buscarYMostrar(codigo);
+  });
+
+  // ---------- MI NÚMERO (cuenta) ----------
+  const cuentaCargando = document.getElementById('cuentaCargando');
+  const cuentaAuth = document.getElementById('cuentaAuth');
+  const cuentaPanel = document.getElementById('cuentaPanel');
+  const tabEntrar = document.getElementById('tabEntrar');
+  const tabRegistro = document.getElementById('tabRegistro');
+  const btnAuth = document.getElementById('btnAuth');
+  const mensajeAuth = document.getElementById('mensajeAuth');
+  let modoRegistro = false;
+
+  tabEntrar.addEventListener('click', () => {
+    modoRegistro = false;
+    tabEntrar.classList.add('activo'); tabRegistro.classList.remove('activo');
+    btnAuth.textContent = 'Entrar'; mensajeAuth.textContent = '';
+  });
+  tabRegistro.addEventListener('click', () => {
+    modoRegistro = true;
+    tabRegistro.classList.add('activo'); tabEntrar.classList.remove('activo');
+    btnAuth.textContent = 'Crear cuenta'; mensajeAuth.textContent = '';
+  });
+
+  btnAuth.addEventListener('click', async () => {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || !password){ mensajeAuth.textContent = 'Rellena correo y contraseña.'; mensajeAuth.className = 'mensaje error'; return; }
+    btnAuth.disabled = true; mensajeAuth.textContent = '';
+    const { error } = modoRegistro
+      ? await sb.auth.signUp({ email, password })
+      : await sb.auth.signInWithPassword({ email, password });
+    btnAuth.disabled = false;
+    if (error){ mensajeAuth.textContent = error.message; mensajeAuth.className = 'mensaje error'; return; }
+    mostrarPanelCuenta();
+  });
+
+  document.getElementById('btnSalir').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    location.reload();
+  });
+
+  document.getElementById('btnReclamar').addEventListener('click', async () => {
+    const codigo = document.getElementById('codigoReclamar').value.trim();
+    const mensajeReclamar = document.getElementById('mensajeReclamar');
+    if (!codigo) return;
+    const { data: { user } } = await sb.auth.getUser();
+    const { data, error } = await sb.from('marcos').update({ user_id: user.id }).eq('codigo', codigo).is('user_id', null).select();
+    if (error){ mensajeReclamar.textContent = 'Error: ' + error.message; mensajeReclamar.className = 'mensaje error'; return; }
+    if (!data || data.length === 0){ mensajeReclamar.textContent = 'Ese código no existe o ya está vinculado a otra cuenta.'; mensajeReclamar.className = 'mensaje error'; return; }
+    mensajeReclamar.textContent = '¡Marco vinculado! Ya aparece abajo.'; mensajeReclamar.className = 'mensaje ok';
+    document.getElementById('codigoReclamar').value = '';
+    cargarMisMarcos();
+  });
+
+  async function cargarMisMarcos(){
+    const lista = document.getElementById('listaMarcos');
+    const { data: { user } } = await sb.auth.getUser();
+    const { data, error } = await sb.from('marcos').select('*').eq('user_id', user.id);
+    if (error || !data || data.length === 0){ lista.innerHTML = '<p class="ayuda">Aún no tienes marcos vinculados.</p>'; return; }
+    lista.innerHTML = '';
+    data.forEach(marco => {
+      const div = document.createElement('div');
+      div.className = 'marco-item';
+      div.innerHTML = `
+        <div class="cod">${marco.codigo}</div>
+        <label>Nombre de quien recibe la llamada</label>
+        <input type="text" value="${marco.nombre_persona || ''}" class="input-nombre" style="margin-bottom:10px;">
+        <label>Número al que llama</label>
+        <div class="fila">
+          <input type="tel" value="${marco.numero_llamada || ''}" class="input-numero">
+          <button class="btn-guardar">Guardar</button>
+        </div>
+        <div class="mensaje mensaje-marco"></div>`;
+      div.querySelector('.btn-guardar').addEventListener('click', async () => {
+        const nuevoNombre = div.querySelector('.input-nombre').value.trim();
+        const nuevoNumero = div.querySelector('.input-numero').value.trim();
+        const msg = div.querySelector('.mensaje-marco');
+        const { error } = await sb.from('marcos').update({ nombre_persona: nuevoNombre, numero_llamada: nuevoNumero }).eq('id', marco.id);
+        msg.textContent = error ? 'Error al guardar.' : '¡Guardado!';
+        msg.className = 'mensaje ' + (error ? 'error' : 'ok');
+      });
+      lista.appendChild(div);
+    });
+  }
+
+  function mostrarPanelCuenta(){
+    cuentaAuth.style.display = 'none';
+    cuentaPanel.style.display = 'block';
+    cargarMisMarcos();
+  }
+
+  async function iniciarCuenta(){
+    const { data: { session } } = await sb.auth.getSession();
+    cuentaCargando.style.display = 'none';
+    if (session){ mostrarPanelCuenta(); } else { cuentaAuth.style.display = 'block'; }
+  }
+
+  // ---------- RESEÑAS ----------
+  document.getElementById('enviarResena').addEventListener('click', async () => {
+    const nombreResena = document.getElementById('nombreResena');
+    const textoResena = document.getElementById('textoResena');
+    const enviarResena = document.getElementById('enviarResena');
+    const gracias = document.getElementById('graciasResena');
+    const errorEl = document.getElementById('errorResena');
+
+    const nombre = nombreResena.value.trim();
+    const texto = textoResena.value.trim();
+    errorEl.style.display = 'none';
+
+    if (!nombre || !texto){
+      errorEl.textContent = 'Escribe tu nombre y tu reseña antes de enviar.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    enviarResena.disabled = true; enviarResena.textContent = 'Enviando…';
+    try {
+      await fetch(URL_RESENAS, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ nombre: nombre, sugerencia: texto, fecha: new Date().toISOString() })
+      });
+      document.getElementById('nombreGracias').textContent = nombre;
+      nombreResena.style.display = 'none';
+      textoResena.style.display = 'none';
+      enviarResena.style.display = 'none';
+      gracias.style.display = 'block';
+    } catch(err){
+      console.error('Error al enviar reseña:', err);
+      errorEl.textContent = 'No se pudo enviar. Comprueba tu conexión e inténtalo de nuevo.';
+      errorEl.style.display = 'block';
+      enviarResena.disabled = false; enviarResena.textContent = 'Enviar reseña';
+    }
+  });
+
+  // ---------- Arranque: decide qué pestaña mostrar según haya código en la URL ----------
+  const paramsIniciales = new URLSearchParams(window.location.search);
+  const codigoInicial = paramsIniciales.get('codigo');
+
+  if (codigoInicial){
+    irA('llamar');
+    setTimeout(() => buscarYMostrar(codigoInicial), 200);
+  } else {
+    irA('cuenta');
+  }
+  iniciarCuenta();
+</script>
+</body>
+</html>
